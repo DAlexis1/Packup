@@ -13,7 +13,7 @@ pip install requirements.txt
 
 To run it :
 ```bash
-python main.py [-h] Action
+python main.py [-h] [--force] Action
 ```
 
 The following actions are supported :
