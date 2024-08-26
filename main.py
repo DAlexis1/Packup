@@ -1,6 +1,7 @@
 import yaml
 import argparse
 import os
+import shutil
 
 programname = "Packup"
 home = ""
@@ -15,6 +16,8 @@ def argsparsing():
                         backup = backup the files\n
                         restore = symlink all the files to the wanted place on a new system\n
                         uninstall=put the files back to their original place like written in config file """)
+    parser.add_argument("--force", action="store_true",
+                        help="write over configs if anything is where you wish to restore or uninstall file")
     return parser.parse_args()
 
 
@@ -46,7 +49,7 @@ def backup():
     print("All files have been backup")
 
 
-def restore():
+def restore(force):
     config = open(f"{home}/.dotfiles/{programname}/{programname}/{programname}.yaml", 'r')
     loadedconfig = yaml.safe_load(config.read())
     config.close()
@@ -58,13 +61,19 @@ def restore():
         if backup[i][-1] == "/":
             backup[i] = backup[i][:-1]
 
-        if not os.path.exists(backup[i]):
-            backup[i] = backup[i].replace("~", home)
-            if backup[i][-1] == "/":
-                backup[i] = backup[i][:-1]
-            os.symlink(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}", backup[i])
+        if os.path.exists(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}"):
+            if os.path.exists(backup[i]) and force:
+                if os.path.isfile(backup[i]) or os.path.islink(backup[i]):
+                    os.remove(backup[i])
+                else:
+                    shutil.rmtree(backup[i])
+
+            if not os.path.exists(backup[i]):
+                os.symlink(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}", backup[i])
+            else:
+                print(f"A config already exist for {i}, please save it in another place")
         else:
-            print(f"A config already exist for {i}, please save them in another place")
+            print(f"Can't restore any config for {i}")
 
     print("All files have been restored")
 
@@ -75,7 +84,7 @@ def newconfig():
     config = open(configpath, "w")
     defaultconfig = {
         "Backup": {
-            programname: f"~/.config/{programname}"
+            programname: f"{configdir}/{programname}"
         }
     }
     yaml.dump(defaultconfig, config)
@@ -84,7 +93,7 @@ def newconfig():
     print("To add other tools to backup keep the same format 'programname: pathtoconfig'")
 
 
-def uninstall():
+def uninstall(force):
     config = open(f"{home}/.dotfiles/{programname}/{programname}/{programname}.yaml", 'r')
     loadedconfig = yaml.safe_load(config.read())
     config.close()
@@ -96,10 +105,21 @@ def uninstall():
         if backup[i][-1] == "/":
             backup[i] = backup[i][:-1]
 
-        os.unlink(backup[i])
-        os.rename(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}", backup[i])
-        os.rmdir(f"{home}/.dotfiles/{i}")
+        if os.path.exists(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}"):
+            if os.path.exists(backup[i]) and force:
+                if os.path.isfile(backup[i]) or os.path.islink(backup[i]):
+                    os.remove(backup[i])
+                else:
+                    shutil.rmtree(backup[i])
 
+            if not os.path.exists(backup[i]):
+                os.unlink(backup[i])
+                os.rename(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}", backup[i])
+                os.rmdir(f"{home}/.dotfiles/{i}")
+            else:
+                print(f"A config already exist for {i}, please save it in another place")
+        else:
+            print(f"Can't restore any config for {i}")
     print("Dotfiles copied back to their initial directory")
 
 
@@ -128,11 +148,11 @@ if __name__ == "__main__":
         case "backup":
             backup()
         case "restore":
-            restore()
+            restore(args.force)
         case "newconfig":
             newconfig()
         case "uninstall":
-            uninstall()
+            uninstall(args.force)
         case _:
             print("Select backup, restore, newconfig or uninstall option")
             exit(1)
