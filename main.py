@@ -63,9 +63,11 @@ def restore(force):
 
         if os.path.exists(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}"):
             if os.path.exists(backup[i]) and force:
-                if os.path.isfile(backup[i]) or os.path.islink(backup[i]):
+                if os.path.isfile(backup[i]):
                     os.remove(backup[i])
-                else:
+                elif os.path.islink(backup[i]):
+                    os.unlink(backup[i])
+                elif os.path.isdir(backup[i]):
                     shutil.rmtree(backup[i])
 
             if not os.path.exists(backup[i]):
@@ -107,13 +109,16 @@ def uninstall(force):
 
         if os.path.exists(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}"):
             if os.path.exists(backup[i]) and force:
-                if os.path.isfile(backup[i]) or os.path.islink(backup[i]):
+                if os.path.isfile(backup[i]):
                     os.remove(backup[i])
-                else:
+                elif os.path.islink(backup[i]):
+                    os.unlink(backup[i])
+                elif os.path.isdir(backup[i]):
                     shutil.rmtree(backup[i])
 
-            if not os.path.exists(backup[i]):
-                os.unlink(backup[i])
+            if not os.path.exists(backup[i]) or os.path.islink(backup[i]):
+                if os.path.islink(backup[i]):
+                    os.unlink(backup[i])
                 os.rename(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}", backup[i])
                 os.rmdir(f"{home}/.dotfiles/{i}")
             else:
