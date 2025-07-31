@@ -2,6 +2,7 @@ import yaml
 import argparse
 import os
 import shutil
+import subprocess
 
 programname = "Packup"
 home = ""
@@ -13,28 +14,38 @@ def argsparsing():
     parser = argparse.ArgumentParser(description="Backup and restore dotfiles to ~/.dotfiles")
     parser.add_argument("Action", action="store",
                         help="""newconfig = generate a default config file\n
-                        backup = backup the files\n
-                        restore = symlink all the files to the wanted place on a new system\n
+                        backup = backup the files and save programs if on arch\n
+                        restore = symlink all the files to the wanted place on a new system + reinstall the programs\n
                         uninstall=put the files back to their original place like written in config file """)
     parser.add_argument("--force", action="store_true",
                         help="write over configs if anything is where you wish to restore or uninstall file")
     return parser.parse_args()
+
+def stripversion(packagelist: list):
+    for i in range(len(packagelist)):
+        packagelist[i] = packagelist[i].split(" ")[0]
+    return(packagelist)
 
 
 def backup():
     if ".dotfiles" not in os.listdir(home):
         os.mkdir(home + "/.dotfiles")
 
+    archlinux = False
+    with open("/etc/os-release","r") as infoos :
+        if 'archlinux' in infoos.read():
+            archlinux=True
+
     config = open(configpath, 'r')
     loadedconfig = yaml.safe_load(config.read())
     config.close()
 
-    print(f"Backup with this configuration :\n{loadedconfig}\n")
+    print(f"[*] Backup with this configuration :\n{loadedconfig}\n")
 
     backup = loadedconfig["Backup"]
     for i in backup.keys():
         if i in os.listdir(f"{home}/.dotfiles"):
-            print(f"{i} is already backup")
+            print(f"[!] {i} is already backup")
         else:
             backup[i] = backup[i].replace("~", home)
             if backup[i][-1] == "/":
@@ -46,7 +57,56 @@ def backup():
 
             os.symlink(f"{home}/.dotfiles/{i}/{backup[i].split("/")[-1]}", backup[i])
 
-    print("All files have been backup")
+    print("[*] All files have been backup")
+    
+    print("\n\n")
+    if archlinux :
+        print("[*] Saving Installed Programs")
+        config = open(configpath,"a")
+        if "Programs" not in loadedconfig.keys():
+            config.write("Programs:\n")
+            config.write("  extras: programlist.txt\n")
+            extrapath = f"{home}/.dotfiles/programlist.txt"
+            config.write("  multilib: multiliblist.txt\n")
+            multilibpath = f"{home}/.dotfiles/multiliblist.txt"
+            config.write("  aur: aurlist.txt\n")
+            aurpath = f"{home}/.dotfiles/aurlist.txt"
+        else:
+            lc = loadedconfig["Programs"]
+            extrapath = f"{home}/.dotfiles/{lc["extras"]}"
+            multilibpath = f"{home}/.dotfiles/{lc["multilib"]}"
+            aurpath = f"{home}/.dotfiles/{lc["aur"]}"
+        config.close()
+            
+        pacinstalled = subprocess.run(["pacman","-Qen"], capture_output=True).stdout.decode()
+        aurinstalled = subprocess.run(["pacman","-Qqem"], capture_output=True).stdout.decode()
+        extras = subprocess.run(["paclist", "extra"], capture_output=True).stdout.decode()
+        multilib = subprocess.run(["paclist", "multilib"], capture_output=True).stdout.decode()
+
+        pacinstalled = set(pacinstalled.split("\n"))
+        extras = set(extras.split("\n"))
+        multilib = set(multilib.split("\n"))
+
+        extraspackages = list(pacinstalled.intersection(extras))
+        extraspackages = stripversion(extraspackages)
+        extraspackages = "\n".join(extraspackages).strip("\n")
+
+        multilibpackages = list(pacinstalled.intersection(multilib))
+        multilibpackages = stripversion(multilibpackages)
+        multilibpackages = "\n".join(multilibpackages).strip("\n")
+
+        print(f"[*] Saving Extras packages in {extrapath}")
+        extrafile = open(extrapath,"w")
+        extrafile.write(extraspackages)
+        extrafile.close()
+        print(f"[*] Saving Multilib packages in {multilibpath}")
+        multilibfile = open(multilibpath,"w")
+        multilibfile.write(multilibpackages)
+        multilibfile.close()
+        print(f"[*] Saving Aur packages in {aurpath}")
+        aurfile = open(aurpath,"w")
+        aurfile.write(aurinstalled)
+        aurfile.close()
 
 
 def restore(force):
